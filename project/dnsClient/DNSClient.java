@@ -65,11 +65,16 @@ public class DNSClient {
 
         // Query header construction
         byte[] queryHeader = new byte[12];
-        queryHeader[0] = queryId[0];
-        queryHeader[1] = queryId[1];
-        queryHeader[2] = queryFlags[0];
-        queryHeader[3] = queryFlags[1];
-        // queryHeader[4] = queryQNo.toByteArray()[0];
+        System.arraycopy(
+            queryId, 0, 
+            queryHeader, 0, 
+            queryId.length
+        );
+        System.arraycopy(
+            queryFlags, 0, 
+            queryHeader, queryId.length, 
+            queryFlags.length
+        );
         queryHeader[5] = queryQNo.toByteArray()[0];
 
         // Query question name
@@ -80,20 +85,60 @@ public class DNSClient {
         }
 
         byte[] queryQuestionName = new byte[questionLength];
-        Integer bitIndex = 0;
+        Integer byteIndex = 0;
         for (int i = 0; i < arrRecordName.length; i++) {
             Integer labelLength = arrRecordName[i].length();
-            queryQuestionName[bitIndex++] = labelLength.byteValue(); 
+            queryQuestionName[byteIndex++] = labelLength.byteValue(); 
             for (int j = 0; j < labelLength; j++) {
-                queryQuestionName[bitIndex++] = (byte) arrRecordName[i].charAt(j);
+                queryQuestionName[byteIndex++] = (byte) arrRecordName[i].charAt(j);
             }
         }
+        queryQuestionName[byteIndex] = (byte) '\0';
 
-        RDebug.printDebug(
-            DEBUG_LEVEL.DEBUG, 
-            "QQN: %s", 
+        byte queryQType = Integer.valueOf(1).byteValue();
+        byte queryQClass = Integer.valueOf(1).byteValue();
+
+        byte[] queryQuestion = new byte[questionLength + 2];
+        System.arraycopy(
+            queryQuestionName, 0, 
+            queryQuestion, 0, 
             queryQuestionName.length
         );
 
+        queryQuestion[queryQuestionName.length] = queryQType;
+        queryQuestion[queryQuestionName.length] = queryQClass;
+
+        byte[] query = new byte[queryHeader.length + queryQuestion.length];
+        System.arraycopy(
+            queryHeader, 0, 
+            query, 0, 
+            queryHeader.length
+        );
+        System.arraycopy(
+            queryQuestion, 0, 
+            query, queryHeader.length, 
+            queryQuestion.length
+        );
+
+        RDebug.printDebug(
+            DEBUG_LEVEL.DEBUG, 
+            "Q: %s", 
+            new String(query)
+        );
+
+        DatagramPacket sendPacket = new DatagramPacket(
+            query, query.length, resolverIP, resolverPort
+        );
+        clientSocket.send(sendPacket);
+
+        byte[] receiveData = new byte[1024];
+        DatagramPacket receivePacket = new DatagramPacket(
+            receiveData, receiveData.length
+        );
+        RDebug.printDebug(
+            DEBUG_LEVEL.INFO, 
+            "REPLY: %s", 
+            new String(receivePacket.getData())
+        );
     }
 }
