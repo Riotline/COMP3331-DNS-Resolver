@@ -6,12 +6,13 @@ import java.util.*;
 import java.nio.file.*;
 import project.util.RDebug;
 import project.util.RQFlag;
+import project.util.RDebug.DEBUG_LEVEL;
 
 public class DNSClient {
     public static void main(String[] args) throws Exception
     {
         // Get command line arguments.
-        if (args.length != 3) {
+        if (args.length < 3) {
             System.out.println("Required arguments: ip, port, A name");
             return;
         }
@@ -19,6 +20,17 @@ public class DNSClient {
         InetAddress resolverIP = InetAddress.getByName(args[0]);
         Integer resolverPort = Integer.parseInt(args[1]);
         String recordName = args[2];
+
+        RDebug.setDebugLevel(
+            args.length > 3 ? RDebug.toDLevel(args[3]) : DEBUG_LEVEL.NONE
+        );
+        RDebug.printDebug(
+            DEBUG_LEVEL.INFO, 
+            "REQ: %s:%d - %s", 
+            resolverIP, 
+            resolverPort, 
+            recordName
+        );
 
         DatagramSocket clientSocket = new DatagramSocket();
 
@@ -38,6 +50,5 @@ public class DNSClient {
         queryHeader = queryId;
         queryHeader[2] = queryFlags.toByteArray()[0];
         queryHeader[3] = queryFlags.toByteArray()[1];
-
     }
 }
