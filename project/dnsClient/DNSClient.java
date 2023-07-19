@@ -52,13 +52,6 @@ public class DNSClient {
 
         byte[] queryFlags = new byte[2];
 
-        // RDebug.printDebug(
-        //     DEBUG_LEVEL.DEBUG, 
-        //     "QF: %s %d", 
-        //     queryFlags.toString(),
-        //     queryFlags.length()
-        // );
-
         // Query number of questions
         BitSet queryQNo = new BitSet(16);
         queryQNo.set(0, true);
@@ -89,24 +82,29 @@ public class DNSClient {
         for (int i = 0; i < arrRecordName.length; i++) {
             Integer labelLength = arrRecordName[i].length();
             queryQuestionName[byteIndex++] = labelLength.byteValue(); 
+            
             for (int j = 0; j < labelLength; j++) {
                 queryQuestionName[byteIndex++] = (byte) arrRecordName[i].charAt(j);
             }
         }
         queryQuestionName[byteIndex] = (byte) '\0';
 
+        // Query Question Type and Class
         byte queryQType = Integer.valueOf(1).byteValue();
         byte queryQClass = Integer.valueOf(1).byteValue();
 
-        byte[] queryQuestion = new byte[questionLength + 2];
+        // Query Question Construction
+        byte[] queryQuestion = new byte[questionLength + 4];
         System.arraycopy(
             queryQuestionName, 0, 
             queryQuestion, 0, 
             queryQuestionName.length
         );
-
-        queryQuestion[queryQuestionName.length] = queryQType;
-        queryQuestion[queryQuestionName.length] = queryQClass;
+        
+        queryQuestion[queryQuestionName.length] = (byte) '\0';
+        queryQuestion[queryQuestionName.length + 1] = queryQType;
+        queryQuestion[queryQuestionName.length + 2] = (byte) '\0';
+        queryQuestion[queryQuestionName.length + 3] = queryQClass;
 
         byte[] query = new byte[queryHeader.length + queryQuestion.length];
         System.arraycopy(
@@ -120,11 +118,8 @@ public class DNSClient {
             queryQuestion.length
         );
 
-        RDebug.printDebug(
-            DEBUG_LEVEL.DEBUG, 
-            "Q: %s", 
-            new String(query)
-        );
+        RDebug.printDebug(DEBUG_LEVEL.DEBUG, "Q: %s", new String(query));
+        RDebug.printDebug(DEBUG_LEVEL.DEBUG, "Q (b): %s", byteToBinary(query));
 
         DatagramPacket sendPacket = new DatagramPacket(
             query, query.length, resolverIP, resolverPort
@@ -135,10 +130,25 @@ public class DNSClient {
         DatagramPacket receivePacket = new DatagramPacket(
             receiveData, receiveData.length
         );
-        RDebug.printDebug(
-            DEBUG_LEVEL.INFO, 
-            "REPLY: %s", 
-            new String(receivePacket.getData())
+        clientSocket.receive(receivePacket);
+        RDebug.printDebug(DEBUG_LEVEL.INFO, 
+            "REPLY: %s", new String(receivePacket.getData())
         );
+
+        String replyInBinary = byteToBinary(
+            receivePacket.getData()
+        ).split("(0)\\1{257}")[0];
+        RDebug.printDebug(DEBUG_LEVEL.DEBUG, "REPLY (b): %s", replyInBinary);
+    }
+
+    private static String byteToBinary(byte[] bytes) {
+        String inBinary = "";
+        for (int i = 0; i < bytes.length; i++) {
+            inBinary += String.format(
+                "%8s", 
+                Integer.toBinaryString(bytes[i] & 0xFF)
+            ).replace(' ', '0');
+        }
+        return inBinary;
     }
 }
