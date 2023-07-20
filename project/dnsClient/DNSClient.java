@@ -127,7 +127,7 @@ public class DNSClient {
         );
         clientSocket.send(sendPacket);
 
-        byte[] receiveData = new byte[1024];
+        byte[] receiveData = new byte[256];
         DatagramPacket receivePacket = new DatagramPacket(
             receiveData, receiveData.length
         );
@@ -138,10 +138,9 @@ public class DNSClient {
             "REPLY: %s", new String(receivePacketBytes)
         );
 
-        String replyInBinary = byteToBinary(receivePacketBytes)
-                                     .split("(0)\\1{257}")[0];
+        String replyInBinary = byteToBinary(receivePacketBytes);
         RDebug.printDebug(DEBUG_LEVEL.DEBUG, 
-            "REPLY (b): %s", replyInBinary
+            "REPLY (b) (L:%d): %s", receiveData.length, replyInBinary
         );
 
         // Response
@@ -175,12 +174,37 @@ public class DNSClient {
             (Short) responseAnswerQtyBuf.getShort()
         ).intValue();
 
-        // Resource Record Name
+        // Question Record Name
         Integer responseOffset = 12;
+        ByteArrayOutputStream questionLabelOutput = new ByteArrayOutputStream();
+        while (true) {
+            Integer labelLength = Byte.toUnsignedInt(receivePacketBytes[responseOffset++]);
+            if (labelLength == 0) break;
+            for (int j = 0; j < labelLength; j++) {
+                questionLabelOutput.write(receivePacketBytes[responseOffset++]);
+            }
+            if (Byte.toUnsignedInt(receivePacketBytes[responseOffset]) != 0) {
+                questionLabelOutput.write('.');
+            }
+        }
+
+        RDebug.printDebug(DEBUG_LEVEL.INFO, 
+            "QLO: %s", questionLabelOutput.toString()
+        );
+
+        // Question TYPE and CLASS
+        responseOffset += 4;
+
+        // Resource Record Name
         ByteArrayOutputStream responseLabelOutput = new ByteArrayOutputStream();
         while (true) {
             Integer labelLength = Byte.toUnsignedInt(receivePacketBytes[responseOffset++]);
             if (labelLength == 0) break;
+            if (labelLength >= 192) {
+                responseLabelOutput.write(questionLabelOutput.toByteArray());
+                responseOffset += 1;
+                break;
+            }
             for (int j = 0; j < labelLength; j++) {
                 responseLabelOutput.write(receivePacketBytes[responseOffset++]);
             }
@@ -208,23 +232,28 @@ public class DNSClient {
         Short responseRDLen = responseToShort(receivePacketBytes, responseOffset);
         responseOffset += 2;
 
+        RDebug.printDebug(DEBUG_LEVEL.INFO, 
+            "RDLength: %d",
+            responseRDLen
+        );
+
         // Response RData
-        byte[] responseRDataBytes = new byte[2];
+        byte[] responseRDataBytes = new byte[responseRDLen];
         System.arraycopy(
             receivePacketBytes, responseOffset, 
             responseRDataBytes, 0, 
             responseRDLen
         );
-        String responseRData = new String(responseRDataBytes);
+        String responseRData = bytesToIP(responseRDataBytes);
         responseOffset += responseRDLen;
-        System.out.printf("%6s %6s %12s %6s %6s\n",
+        System.out.printf("%6s %6s %8s %10s %16s\n",
             "Type",
             "Class",
             "TTL",
             "RDLength",
             "RData"
         );
-        System.out.printf("%6d %6d %12d %6d %s\n", 
+        System.out.printf("%6d %6d %8d %10d %16s\n", 
             responseType, 
             responseClass,
             responseTTL,
@@ -272,5 +301,9 @@ public class DNSClient {
             "TTL (b): %s", byteToBinary(responseBytes)
         );
         return (Long) (responseBuf.getInt() & 0xFFFFFFFFL);
+    }
+
+    private static String bytesToIP(byte[] bytes) {
+        return (bytes[0] & 0xff) + "." + (bytes[1] & 0xff) + "." + (bytes[2] & 0xff) + "." + (bytes[3] & 0xff);
     }
 }
