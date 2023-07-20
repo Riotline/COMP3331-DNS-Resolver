@@ -91,8 +91,8 @@ public class DNSClient {
         queryQuestionName[byteIndex] = (byte) '\0';
 
         // Query Question Type and Class
-        byte queryQType = Integer.valueOf(1).byteValue();
-        byte queryQClass = Integer.valueOf(1).byteValue();
+        byte queryQType = 1;
+        byte queryQClass = 1;
 
         // Query Question Construction
         byte[] queryQuestion = new byte[questionLength + 4];
@@ -163,17 +163,19 @@ public class DNSClient {
             ); return;
         }
 
+        // For getting count of answers for the use in looping
         byte[] responseAnswerQtyBytes = new byte[2];
         System.arraycopy(
             receivePacketBytes, 6, 
             responseAnswerQtyBytes, 0, 
             2
         );
-        ByteBuffer wrappedResponseAnswerQty = ByteBuffer.wrap(responseAnswerQtyBytes);
+        ByteBuffer responseAnswerQtyBuf = ByteBuffer.wrap(responseAnswerQtyBytes);
         Integer responseAnswerQty = (
-            (Short) wrappedResponseAnswerQty.getShort()
+            (Short) responseAnswerQtyBuf.getShort()
         ).intValue();
 
+        // Resource Record Name
         Integer responseOffset = 12;
         ByteArrayOutputStream responseLabelOutput = new ByteArrayOutputStream();
         while (true) {
@@ -182,10 +184,53 @@ public class DNSClient {
             for (int j = 0; j < labelLength; j++) {
                 responseLabelOutput.write(receivePacketBytes[responseOffset++]);
             }
+            if (Byte.toUnsignedInt(receivePacketBytes[responseOffset]) != 0) {
+                responseLabelOutput.write('.');
+            }
         }
         RDebug.printDebug(DEBUG_LEVEL.INFO, 
-            "RLO: %s.", responseLabelOutput.toString()
-        ); return;
+            "RLO: %s (%d)", responseLabelOutput.toString(), responseAnswerQty
+        );
+
+        // Response TYPE
+        Short responseType = responseToShort(receivePacketBytes, responseOffset);
+        responseOffset += 2;
+
+        // Response CLASS
+        Short responseClass = responseToShort(receivePacketBytes, responseOffset);
+        responseOffset += 2;
+
+        // Response TTL
+        Long responseTTL = responseToLong(receivePacketBytes, responseOffset);
+        responseOffset += 4;
+
+        // Response RDLength
+        Short responseRDLen = responseToShort(receivePacketBytes, responseOffset);
+        responseOffset += 2;
+
+        // Response RData
+        byte[] responseRDataBytes = new byte[2];
+        System.arraycopy(
+            receivePacketBytes, responseOffset, 
+            responseRDataBytes, 0, 
+            responseRDLen
+        );
+        String responseRData = new String(responseRDataBytes);
+        responseOffset += responseRDLen;
+        System.out.printf("%6s %6s %12s %6s %6s\n",
+            "Type",
+            "Class",
+            "TTL",
+            "RDLength",
+            "RData"
+        );
+        System.out.printf("%6d %6d %12d %6d %s\n", 
+            responseType, 
+            responseClass,
+            responseTTL,
+            responseRDLen,
+            responseRData
+        );
     }
 
     private static String byteToBinary(byte[] bytes) {
@@ -201,5 +246,31 @@ public class DNSClient {
 
     private static Boolean isBit(byte bByte, int pos) {
         return (((bByte >> pos) & 1) == 1);
+    }
+
+    private static short responseToShort(byte[] response, int responseOffset) {
+        byte[] responseBytes = new byte[2];
+        System.arraycopy(
+            response, responseOffset, 
+            responseBytes, 0, 
+            2
+        );
+        ByteBuffer responseBuf = ByteBuffer.wrap(responseBytes);
+        return responseBuf.getShort();
+    }
+
+    private static Long responseToLong(byte[] response, int responseOffset) {
+        byte[] responseBytes = new byte[4];
+        System.arraycopy(
+            response, responseOffset, 
+            responseBytes, 0, 
+            4
+        );
+        ByteBuffer responseBuf = ByteBuffer.wrap(responseBytes);
+
+        RDebug.printDebug(DEBUG_LEVEL.INFO, 
+            "TTL (b): %s", byteToBinary(responseBytes)
+        );
+        return (Long) (responseBuf.getInt() & 0xFFFFFFFFL);
     }
 }
