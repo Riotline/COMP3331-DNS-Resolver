@@ -3,6 +3,7 @@ package project.dnsClient;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.nio.ByteBuffer;
 import java.nio.file.*;
 import project.util.RDebug;
 import project.util.RQFlag;
@@ -131,14 +132,60 @@ public class DNSClient {
             receiveData, receiveData.length
         );
         clientSocket.receive(receivePacket);
+        byte[] receivePacketBytes = receivePacket.getData();
+
         RDebug.printDebug(DEBUG_LEVEL.INFO, 
-            "REPLY: %s", new String(receivePacket.getData())
+            "REPLY: %s", new String(receivePacketBytes)
         );
 
-        String replyInBinary = byteToBinary(
-            receivePacket.getData()
-        ).split("(0)\\1{257}")[0];
-        RDebug.printDebug(DEBUG_LEVEL.DEBUG, "REPLY (b): %s", replyInBinary);
+        String replyInBinary = byteToBinary(receivePacketBytes)
+                                     .split("(0)\\1{257}")[0];
+        RDebug.printDebug(DEBUG_LEVEL.DEBUG, 
+            "REPLY (b): %s", replyInBinary
+        );
+
+        // Response
+        byte[] responseId = new byte[2];
+        System.arraycopy(
+            receivePacketBytes, 0, 
+            responseId, 0, 
+            2
+        );
+
+        if (!(byteToBinary(responseId).equals(byteToBinary(queryId)))) {
+            RDebug.printDebug(DEBUG_LEVEL.WARNING, 
+                "Response ID (%s) mismatch to Query ID (%s)",
+                byteToBinary(responseId), byteToBinary(queryId)
+            ); return;
+        } else if (!isBit(receivePacketBytes[2], 7)) {
+            RDebug.printDebug(DEBUG_LEVEL.WARNING, 
+                "QR flag returned as a query not as a response."
+            ); return;
+        }
+
+        byte[] responseAnswerQtyBytes = new byte[2];
+        System.arraycopy(
+            receivePacketBytes, 6, 
+            responseAnswerQtyBytes, 0, 
+            2
+        );
+        ByteBuffer wrappedResponseAnswerQty = ByteBuffer.wrap(responseAnswerQtyBytes);
+        Integer responseAnswerQty = (
+            (Short) wrappedResponseAnswerQty.getShort()
+        ).intValue();
+
+        Integer responseOffset = 12;
+        ByteArrayOutputStream responseLabelOutput = new ByteArrayOutputStream();
+        while (true) {
+            Integer labelLength = Byte.toUnsignedInt(receivePacketBytes[responseOffset++]);
+            if (labelLength == 0) break;
+            for (int j = 0; j < labelLength; j++) {
+                responseLabelOutput.write(receivePacketBytes[responseOffset++]);
+            }
+        }
+        RDebug.printDebug(DEBUG_LEVEL.INFO, 
+            "RLO: %s.", responseLabelOutput.toString()
+        ); return;
     }
 
     private static String byteToBinary(byte[] bytes) {
@@ -150,5 +197,9 @@ public class DNSClient {
             ).replace(' ', '0');
         }
         return inBinary;
+    }
+
+    private static Boolean isBit(byte bByte, int pos) {
+        return (((bByte >> pos) & 1) == 1);
     }
 }

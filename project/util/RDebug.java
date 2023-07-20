@@ -29,14 +29,16 @@ public class RDebug {
 
     public static void printDebug(DEBUG_LEVEL level, String string, Object... args) {
         if (debugLevel == DEBUG_LEVEL.NONE) return;
-        string = String.format(string, args);
-        System.out.printf(
-            "  %s[%s]%s %s\n", 
-            ANSI_PURPLE,
-            level, 
-            ANSI_RESET, 
-            string,
-            args
-        );
+        else if (debugLevel == DEBUG_LEVEL.DEBUG) {
+            string = String.format(string, args);
+            System.out.printf(
+                "  %s[%s]%s %s\n", 
+                ANSI_PURPLE,
+                level, 
+                ANSI_RESET, 
+                string,
+                args
+            );
+        }
     }
 }
