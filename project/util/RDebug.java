@@ -27,9 +27,18 @@ public class RDebug {
         }
     }
 
-    public static void printDebug(DEBUG_LEVEL level, String string, Object... args) {
-        if (debugLevel == DEBUG_LEVEL.NONE) return;
-        else if (debugLevel == DEBUG_LEVEL.DEBUG) {
+    private static int DLevelToInt(DEBUG_LEVEL dLevel) {
+        switch (dLevel) {
+            case INFO       :   return 1;
+            case WARNING    :   return 2;
+            case DEBUG      :   return 3;        
+            default         :   return 0;  
+        }
+    }
+
+    public static void print(DEBUG_LEVEL level, String string, Object... args) {
+        if (DLevelToInt(debugLevel) < DLevelToInt(level)) return;
+        else {
             string = String.format(string, args);
             System.out.printf(
                 "  %s[%s]%s %s\n", 
@@ -40,5 +49,7 @@ public class RDebug {
                 args
             );
         }
+
+        
     }
 }

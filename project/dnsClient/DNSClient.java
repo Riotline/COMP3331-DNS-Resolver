@@ -14,11 +14,16 @@ public class DNSClient {
     {
         // Get command line arguments.
         if (args.length < 3) {
-            System.out.println("Required arguments: ip, port, A name");
+            System.out.println("Required arguments: resolver ip, resolver port, name");
             return;
         }
 
         // Arguments for resolver
+        // Cant Use Below cus it is doing the job already
+        if (!args[0].matches("^((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.?\\b){4}$")) {
+            System.out.println("Invalid resolver IP.");
+            return;
+        }
         InetAddress resolverIP = InetAddress.getByName(args[0]);
         Integer resolverPort = Integer.parseInt(args[1]);
         String recordName = args[2];
@@ -27,7 +32,7 @@ public class DNSClient {
         RDebug.setDebugLevel(
             args.length > 3 ? RDebug.toDLevel(args[3]) : DEBUG_LEVEL.NONE
         );
-        RDebug.printDebug(
+        RDebug.print(
             DEBUG_LEVEL.INFO, 
             "REQ: %s:%d - %s", 
             resolverIP, 
@@ -119,8 +124,8 @@ public class DNSClient {
             queryQuestion.length
         );
 
-        RDebug.printDebug(DEBUG_LEVEL.DEBUG, "Q: %s", new String(query));
-        RDebug.printDebug(DEBUG_LEVEL.DEBUG, "Q (b): %s", byteToBinary(query));
+        RDebug.print(DEBUG_LEVEL.DEBUG, "Q: %s", new String(query));
+        RDebug.print(DEBUG_LEVEL.DEBUG, "Q (b): %s", byteToBinary(query));
 
         DatagramPacket sendPacket = new DatagramPacket(
             query, query.length, resolverIP, resolverPort
@@ -134,12 +139,12 @@ public class DNSClient {
         clientSocket.receive(receivePacket);
         byte[] receivePacketBytes = receivePacket.getData();
 
-        RDebug.printDebug(DEBUG_LEVEL.INFO, 
+        RDebug.print(DEBUG_LEVEL.DEBUG, 
             "REPLY: %s", new String(receivePacketBytes)
         );
 
         String replyInBinary = byteToBinary(receivePacketBytes);
-        RDebug.printDebug(DEBUG_LEVEL.DEBUG, 
+        RDebug.print(DEBUG_LEVEL.DEBUG, 
             "REPLY (b) (L:%d): %s", receiveData.length, replyInBinary
         );
 
@@ -152,12 +157,12 @@ public class DNSClient {
         );
 
         if (!(byteToBinary(responseId).equals(byteToBinary(queryId)))) {
-            RDebug.printDebug(DEBUG_LEVEL.WARNING, 
+            RDebug.print(DEBUG_LEVEL.WARNING, 
                 "Response ID (%s) mismatch to Query ID (%s)",
                 byteToBinary(responseId), byteToBinary(queryId)
             ); return;
         } else if (!isBit(receivePacketBytes[2], 7)) {
-            RDebug.printDebug(DEBUG_LEVEL.WARNING, 
+            RDebug.print(DEBUG_LEVEL.WARNING, 
                 "QR flag returned as a query not as a response."
             ); return;
         }
@@ -174,6 +179,16 @@ public class DNSClient {
             (Short) responseAnswerQtyBuf.getShort()
         ).intValue();
 
+        if (responseAnswerQty > 0) {
+            System.out.printf("%6s %6s %8s %10s %16s\n",
+                "Type",
+                "Class",
+                "TTL",
+                "RDLength",
+                "RData"
+            );
+        }
+
         // Question Record Name
         Integer responseOffset = 12;
         ByteArrayOutputStream questionLabelOutput = new ByteArrayOutputStream();
@@ -188,78 +203,76 @@ public class DNSClient {
             }
         }
 
-        RDebug.printDebug(DEBUG_LEVEL.INFO, 
-            "QLO: %s", questionLabelOutput.toString()
+        RDebug.print(DEBUG_LEVEL.DEBUG, 
+            "QLO: %s\nQLO (b): %s", 
+            questionLabelOutput.toString(), 
+            byteToBinary(questionLabelOutput.toByteArray())
         );
 
         // Question TYPE and CLASS
         responseOffset += 4;
 
-        // Resource Record Name
-        ByteArrayOutputStream responseLabelOutput = new ByteArrayOutputStream();
-        while (true) {
-            Integer labelLength = Byte.toUnsignedInt(receivePacketBytes[responseOffset++]);
-            if (labelLength == 0) break;
-            if (labelLength >= 192) {
-                responseLabelOutput.write(questionLabelOutput.toByteArray());
-                responseOffset += 1;
-                break;
+        for (int i = 0; i < responseAnswerQty; i++) {
+            // Resource Record Name
+            ByteArrayOutputStream responseLabelOutput = new ByteArrayOutputStream();
+            while (true) {
+                Integer labelLength = Byte.toUnsignedInt(receivePacketBytes[responseOffset++]);
+                if (labelLength == 0) break;
+                if (labelLength >= 192) {
+                    responseLabelOutput.write(questionLabelOutput.toByteArray());
+                    responseOffset += 1;
+                    break;
+                }
+                for (int j = 0; j < labelLength; j++) {
+                    responseLabelOutput.write(receivePacketBytes[responseOffset++]);
+                }
+                if (Byte.toUnsignedInt(receivePacketBytes[responseOffset]) != 0) {
+                    responseLabelOutput.write('.');
+                }
             }
-            for (int j = 0; j < labelLength; j++) {
-                responseLabelOutput.write(receivePacketBytes[responseOffset++]);
-            }
-            if (Byte.toUnsignedInt(receivePacketBytes[responseOffset]) != 0) {
-                responseLabelOutput.write('.');
-            }
+            RDebug.print(DEBUG_LEVEL.DEBUG, 
+                "RLO: %s (%d)", 
+                responseLabelOutput.toString(), responseAnswerQty
+            );
+
+            // Response TYPE
+            Short responseType  = responseToShort(receivePacketBytes, responseOffset);
+            responseOffset += 2;
+
+            // Response CLASS
+            Short responseClass = responseToShort(receivePacketBytes, responseOffset);
+            responseOffset += 2;
+
+            // Response TTL
+            Long responseTTL    = responseToLong(receivePacketBytes, responseOffset);
+            responseOffset += 4;
+
+            // Response RDLength
+            Short responseRDLen = responseToShort(receivePacketBytes, responseOffset);
+            responseOffset += 2;
+
+            RDebug.print(DEBUG_LEVEL.DEBUG, 
+                "RData Length: %d",
+                responseRDLen
+            );
+
+            // Response RData
+            byte[] responseRDataBytes = new byte[responseRDLen];
+            System.arraycopy(
+                receivePacketBytes, responseOffset, 
+                responseRDataBytes, 0, 
+                responseRDLen
+            );
+            String responseRData = bytesToIP(responseRDataBytes);
+            responseOffset += responseRDLen;
+            System.out.printf("%6d %6d %8d %10d %16s\n", 
+                responseType, 
+                responseClass,
+                responseTTL,
+                responseRDLen,
+                responseRData
+            );
         }
-        RDebug.printDebug(DEBUG_LEVEL.INFO, 
-            "RLO: %s (%d)", responseLabelOutput.toString(), responseAnswerQty
-        );
-
-        // Response TYPE
-        Short responseType = responseToShort(receivePacketBytes, responseOffset);
-        responseOffset += 2;
-
-        // Response CLASS
-        Short responseClass = responseToShort(receivePacketBytes, responseOffset);
-        responseOffset += 2;
-
-        // Response TTL
-        Long responseTTL = responseToLong(receivePacketBytes, responseOffset);
-        responseOffset += 4;
-
-        // Response RDLength
-        Short responseRDLen = responseToShort(receivePacketBytes, responseOffset);
-        responseOffset += 2;
-
-        RDebug.printDebug(DEBUG_LEVEL.INFO, 
-            "RDLength: %d",
-            responseRDLen
-        );
-
-        // Response RData
-        byte[] responseRDataBytes = new byte[responseRDLen];
-        System.arraycopy(
-            receivePacketBytes, responseOffset, 
-            responseRDataBytes, 0, 
-            responseRDLen
-        );
-        String responseRData = bytesToIP(responseRDataBytes);
-        responseOffset += responseRDLen;
-        System.out.printf("%6s %6s %8s %10s %16s\n",
-            "Type",
-            "Class",
-            "TTL",
-            "RDLength",
-            "RData"
-        );
-        System.out.printf("%6d %6d %8d %10d %16s\n", 
-            responseType, 
-            responseClass,
-            responseTTL,
-            responseRDLen,
-            responseRData
-        );
     }
 
     private static String byteToBinary(byte[] bytes) {
@@ -297,7 +310,7 @@ public class DNSClient {
         );
         ByteBuffer responseBuf = ByteBuffer.wrap(responseBytes);
 
-        RDebug.printDebug(DEBUG_LEVEL.INFO, 
+        RDebug.print(DEBUG_LEVEL.DEBUG, 
             "TTL (b): %s", byteToBinary(responseBytes)
         );
         return (Long) (responseBuf.getInt() & 0xFFFFFFFFL);
