@@ -21,4 +21,18 @@ public class DNSResolver {
             
         }
     }
+
+    private static String findA(InetAddress name) {
+        
+    }
+
+    // This calls the normal NStoIP if it isn't in the additional records
+    private static String NStoIP(byte[] response, String name) {
+
+    }
+
+    // This does another query for the NS from scratch
+    private static String NStoIP(String name) {
+
+    }
 }
