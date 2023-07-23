@@ -5,10 +5,12 @@ import java.net.*;
 import java.util.*;
 import java.nio.file.*;
 import project.util.RDebug;
+import project.util.RDNSPacket;
 import project.util.RDebug.DEBUG_LEVEL;
 
 public class DNSResolver {
-    private static ArrayList<InetAddress> rootServers = new ArrayList<InetAddress>(); 
+    private static ArrayList<InetAddress> rootServers = new ArrayList<InetAddress>();
+    private static ArrayList<RDNSPacket> currentPackets = new ArrayList<RDNSPacket>();
     public static void main(String[] args) throws Exception
     {
         // Get command line argument.
@@ -50,8 +52,13 @@ public class DNSResolver {
             "Running on port %d", serverSocket.getLocalPort()
         );
 
+        byte[] receiveData = new byte[1024];
+        byte[] sendData = new byte[1024];
         // Processing Loop
         while (true) {
+            DatagramPacket receivePacket = new DatagramPacket(
+                receiveData, receiveData.length
+            );
             break;
         }
 
