@@ -10,6 +10,7 @@ import project.util.LabelRtn;
 import project.util.RDebug;
 import project.util.RQFlag;
 import project.util.RDebug.DEBUG_LEVEL;
+import project.util.RDNS;
 
 public class DNSClient {
     public static void main(String[] args) throws Exception
@@ -127,7 +128,7 @@ public class DNSClient {
         );
 
         RDebug.print(DEBUG_LEVEL.DEBUG, "Q: %s", new String(query));
-        RDebug.print(DEBUG_LEVEL.DEBUG, "Q (b): %s", byteToBinary(query));
+        RDebug.print(DEBUG_LEVEL.DEBUG, "Q (b): %s", RDNS.byteToBinary(query));
 
         DatagramPacket sendPacket = new DatagramPacket(
             query, query.length, resolverIP, resolverPort
@@ -145,7 +146,7 @@ public class DNSClient {
             "REPLY: %s", new String(receivePacketBytes)
         );
 
-        String replyInBinary = byteToBinary(receivePacketBytes);
+        String replyInBinary = RDNS.byteToBinary(receivePacketBytes);
         RDebug.print(DEBUG_LEVEL.DEBUG, 
             "REPLY (b) (L:%d): %s", receiveData.length, replyInBinary
         );
@@ -158,27 +159,27 @@ public class DNSClient {
             2
         );
 
-        if (!(byteToBinary(responseId).equals(byteToBinary(queryId)))) {
+        if (!(RDNS.byteToBinary(responseId).equals(RDNS.byteToBinary(queryId)))) {
             RDebug.print(DEBUG_LEVEL.WARNING, 
                 "Response ID (%s) mismatch to Query ID (%s)",
-                byteToBinary(responseId), byteToBinary(queryId)
+                RDNS.byteToBinary(responseId), RDNS.byteToBinary(queryId)
             ); return;
-        } else if (!isBit(receivePacketBytes[2], 7)) {
+        } else if (!RDNS.isBit(receivePacketBytes[2], 7)) {
             RDebug.print(DEBUG_LEVEL.WARNING, 
                 "QR flag returned as a query not as a response."
             ); return;
         }
 
         // For getting count of answers for the use in looping
-        Integer responseAnswerQty = getQtyOfRecords(
+        Integer responseAnswerQty = RDNS.getQtyOfRecords(
             receivePacketBytes, 6
         );
 
-        Integer responseAuthorityQty = getQtyOfRecords(
+        Integer responseAuthorityQty = RDNS.getQtyOfRecords(
             receivePacketBytes, 8
         );
 
-        Integer responseAdditionalQty = getQtyOfRecords(
+        Integer responseAdditionalQty = RDNS.getQtyOfRecords(
             receivePacketBytes, 10
         );
 
@@ -219,7 +220,7 @@ public class DNSClient {
         RDebug.print(DEBUG_LEVEL.DEBUG, 
             "QLO: %s\nQLO (b): %s", 
             questionLabelOutput.toString(), 
-            byteToBinary(questionLabelOutput.toByteArray())
+            RDNS.byteToBinary(questionLabelOutput.toByteArray())
         );
 
         // Question TYPE and CLASS
@@ -227,7 +228,7 @@ public class DNSClient {
 
         for (int i = 0; i < responseTotalRecords; i++) {
             // Resource Record Name
-            LabelRtn labelRtn = readLabel(receivePacketBytes, responseOffset);
+            LabelRtn labelRtn = RDNS.readLabel(receivePacketBytes, responseOffset);
             responseOffset = labelRtn.getOffset();
             String fullLabel = labelRtn.getLabelString();
 
@@ -237,19 +238,19 @@ public class DNSClient {
             );
 
             // Response TYPE
-            Short responseType  = responseToShort(receivePacketBytes, responseOffset);
+            Short responseType  = RDNS.responseToShort(receivePacketBytes, responseOffset);
             responseOffset += 2;
 
             // Response CLASS
-            Short responseClass = responseToShort(receivePacketBytes, responseOffset);
+            Short responseClass = RDNS.responseToShort(receivePacketBytes, responseOffset);
             responseOffset += 2;
 
             // Response TTL
-            Long responseTTL    = responseToUnsignedInt(receivePacketBytes, responseOffset);
+            Long responseTTL    = RDNS.responseToUnsignedInt(receivePacketBytes, responseOffset);
             responseOffset += 4;
 
             // Response RDLength
-            Short responseRDLen = responseToShort(receivePacketBytes, responseOffset);
+            Short responseRDLen = RDNS.responseToShort(receivePacketBytes, responseOffset);
             responseOffset += 2;
 
             RDebug.print(DEBUG_LEVEL.DEBUG, 
@@ -269,140 +270,21 @@ public class DNSClient {
             );
 
             String responseRData = new String();
-            if (typeIndexToType(responseType) != "NS") {
-                responseRData = bytesToIP(responseRDataBytes);
+            if (RDNS.typeIndexToType(responseType) != "NS") {
+                responseRData = RDNS.bytesToIP(responseRDataBytes);
             } else {
-                LabelRtn lRtn = readLabel(receivePacketBytes, responseOffset);
+                LabelRtn lRtn = RDNS.readLabel(receivePacketBytes, responseOffset);
                 responseRData = new String(lRtn.getLabelString());
             }
             responseOffset += responseRDLen;
             System.out.printf("%28s %6s %6d %8d %10d %28s\n",
                 fullLabel, 
-                typeIndexToType(responseType), 
+                RDNS.typeIndexToType(responseType), 
                 responseClass,
                 responseTTL,
                 responseRDLen,
                 responseRData
             );
         }
-    }
-
-    private static String byteToBinary(byte[] bytes) {
-        String inBinary = "";
-        for (int i = 0; i < bytes.length; i++) {
-            inBinary += String.format(
-                "%8s", 
-                Integer.toBinaryString(bytes[i] & 0xFF)
-            ).replace(' ', '0');
-        }
-        return inBinary;
-    }
-
-    // Checking specific bits (like bitflags)
-    private static Boolean isBit(byte bByte, int pos) {
-        return (((bByte >> pos) & 1) == 1);
-    }
-
-    // Convert a byte array of size 2 into a Short
-    private static short responseToShort(byte[] response, int responseOffset) {
-        byte[] responseBytes = new byte[2];
-        System.arraycopy(
-            response, responseOffset, 
-            responseBytes, 0, 
-            2
-        );
-        ByteBuffer responseBuf = ByteBuffer.wrap(responseBytes);
-        return responseBuf.getShort();
-    }
-
-    // Used for unsigned int as a long
-    private static Long responseToUnsignedInt(byte[] response, int responseOffset) {
-        byte[] responseBytes = new byte[4];
-        System.arraycopy(
-            response, responseOffset, 
-            responseBytes, 0, 
-            4
-        );
-        ByteBuffer responseBuf = ByteBuffer.wrap(responseBytes);
-
-        RDebug.print(DEBUG_LEVEL.DEBUG, 
-            "TTL (b): %s", byteToBinary(responseBytes)
-        );
-        return (Long) (responseBuf.getInt() & 0xFFFFFFFFL);
-    }
-
-    // Bytes to an string IP representation
-    private static String bytesToIP(byte[] bytes) {
-        return (bytes[0] & 0xff) + "." + (bytes[1] & 0xff) + "." + (bytes[2] & 0xff) + "." + (bytes[3] & 0xff);
-    }
-
-    private static String typeIndexToType(int typeIndex) {
-        switch (typeIndex) {
-            case 1: return "A";
-            case 2: return "NS";
-            case 28: return "AAAA";
-            default: return "?";
-        }
-    }
-
-    private static int getQtyOfRecords(byte[] response, int offset) {
-        byte[] responseQtyBytes = new byte[2];
-        System.arraycopy(
-            response, offset, 
-            responseQtyBytes, 0, 
-            2
-        );
-        ByteBuffer responseQtyBuf = ByteBuffer.wrap(responseQtyBytes);
-        return ((Short) responseQtyBuf.getShort()).intValue();
-    }
-
-    // Does the label and message compression reading
-    private static LabelRtn readLabel(byte[] bytes, int offset) {
-        // Is this label just a pointer.
-        // If so, return what is at that pointer
-        if (isLabelPtrByte(bytes[offset])) {
-            byte[] labelPtrBytes = {bytes[offset], bytes[offset+1]};
-            labelPtrBytes[0] = (byte) (labelPtrBytes[0] & 0b00111111);
-            ByteBuffer labelPtrBuf = ByteBuffer.wrap(labelPtrBytes);
-            Short labelPtr = labelPtrBuf.getShort();
-            RDebug.print(DEBUG_LEVEL.DEBUG, "LP: %d", labelPtr);
-            LabelRtn lRtn = readLabel(bytes, labelPtr);
-            return new LabelRtn(lRtn.getLabelString(), offset+2);
-        }
-
-        int currentOffset = offset;
-        String labelString = new String();
-        while (true) {        
-            // Collect all the parts of the label    
-            int sizeOfLabel = Byte.toUnsignedInt(bytes[currentOffset++]);
-            RDebug.print(DEBUG_LEVEL.DEBUG, "LS: %d", sizeOfLabel);
-            for (int i = 0; i < sizeOfLabel; i++) {
-                labelString += (char) bytes[currentOffset++];
-                RDebug.print(DEBUG_LEVEL.DEBUG, "L (%d): %s", currentOffset-1, labelString);
-            }
-
-            // If a label ends with a zero octet, thats it
-            // Check if Sequence of Labels ending with Pointer
-            // Otherwise, continue
-            if (Byte.toUnsignedInt(bytes[currentOffset]) == 0) {
-                break;
-            } else if (isLabelPtrByte(bytes[currentOffset])) {
-                labelString += '.';
-                RDebug.print(DEBUG_LEVEL.DEBUG, "LABEL PTR FOUND");
-                LabelRtn lRtn = readLabel(bytes, currentOffset);
-                currentOffset += 2;
-                labelString += lRtn.getLabelString();
-                break;
-            } else {
-                labelString += '.';
-            }
-            RDebug.print(DEBUG_LEVEL.DEBUG, "Label: %s", labelString);
-        }
-        return new LabelRtn(labelString, currentOffset);
-    }
-
-    // Does the byte point to another location
-    public static boolean isLabelPtrByte(byte labelByte) {
-        return (((labelByte >> 6) & 0b11) >= 3);
     }
 }
