@@ -3,6 +3,7 @@ package project.dnsResolver;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.nio.ByteBuffer;
 import java.nio.file.*;
 import project.util.RDebug;
 import project.util.RDNSPacket;
@@ -57,10 +58,34 @@ public class DNSResolver {
         // Processing Loop
         while (true) {
             DatagramPacket receivePacket = new DatagramPacket(
-                receiveData, receiveData.length
+                receiveData, receiveData.length);
+            serverSocket.receive(receivePacket);
+            ByteBuffer packetId = ByteBuffer.wrap(
+                receivePacket.getData(), 0, 2);
+            RDebug.print(DEBUG_LEVEL.DEBUG, 
+                "%d", packetId.getShort()
             );
-            break;
+            currentPackets.add(new RDNSPacket(receivePacket));
         }
 
     }
+}
+
+class ReceivingThread implements Runnable {
+
+    @Override
+    public void run() {
+        while (true) {
+            DatagramPacket receivePacket = new DatagramPacket(
+                receiveData, receiveData.length);
+            serverSocket.receive(receivePacket);
+            ByteBuffer packetId = ByteBuffer.wrap(
+                receivePacket.getData(), 0, 2);
+            RDebug.print(DEBUG_LEVEL.DEBUG, 
+                "%d", packetId.getShort()
+            );
+            currentPackets.add(new RDNSPacket(receivePacket));
+        }
+    }
+    
 }

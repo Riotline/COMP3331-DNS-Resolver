@@ -1,22 +1,27 @@
 package project.util;
 
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
 
 public class RDNSPacket {
     private ArrayList<RDNSPacket> newPackets = new ArrayList<RDNSPacket>();
-    private String identifier;
+    private Short identifier;
     private byte[] data;
+    private DatagramPacket rawPacket;
     private Instant timestamp = Instant.now();
 
-    public RDNSPacket(byte[] identifier, byte[] data) {
-        this.identifier = identifier.toString();
-        this.data = data;
+    public RDNSPacket(DatagramPacket packet, RDNSPacket parent) {
+        RDNSPacket rP = new RDNSPacket(packet);
+        parent.newPackets.add(rP);
     }
 
-    public RDNSPacket(byte[] identifier, byte[] data, RDNSPacket parent) {
-        RDNSPacket rPacket = new RDNSPacket(identifier, data);
-        newPackets.add(rPacket);
+    public RDNSPacket(DatagramPacket packet) {
+        this.rawPacket = packet;
+        this.data = packet.getData();
+        this.identifier = ByteBuffer.wrap(data, 0, 2).getShort();
     }
 
     public Instant getTimestamp() {
@@ -27,7 +32,7 @@ public class RDNSPacket {
         return data;
     }
 
-    public String getIdentifier() {
+    public Short getIdentifier() {
         return identifier;
     }
 
