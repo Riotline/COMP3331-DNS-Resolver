@@ -11,7 +11,7 @@ import project.util.RDebug.DEBUG_LEVEL;
 
 public class DNSResolver {
     private static ArrayList<InetAddress> rootServers = new ArrayList<InetAddress>();
-    private static ArrayList<RDNSPacket> currentPackets = new ArrayList<RDNSPacket>();
+    protected static ArrayList<RDNSPacket> currentPackets = new ArrayList<RDNSPacket>();
     public static void main(String[] args) throws Exception
     {
         // Get command line argument.
@@ -53,38 +53,50 @@ public class DNSResolver {
             "Running on port %d", serverSocket.getLocalPort()
         );
 
-        byte[] receiveData = new byte[1024];
-        byte[] sendData = new byte[1024];
+        Thread receivingDaemon = new Thread(new ReceivingThread(serverSocket));
+        receivingDaemon.setDaemon(true);
+        receivingDaemon.start();
         // Processing Loop
+        RDebug.print(DEBUG_LEVEL.DEBUG,
+            "Main Thread ID: %d",
+            Thread.currentThread().getId()
+        );
         while (true) {
-            DatagramPacket receivePacket = new DatagramPacket(
-                receiveData, receiveData.length);
-            serverSocket.receive(receivePacket);
-            ByteBuffer packetId = ByteBuffer.wrap(
-                receivePacket.getData(), 0, 2);
-            RDebug.print(DEBUG_LEVEL.DEBUG, 
-                "%d", packetId.getShort()
-            );
-            currentPackets.add(new RDNSPacket(receivePacket));
+            continue;
         }
 
     }
 }
 
 class ReceivingThread implements Runnable {
+    private DatagramSocket serverSocket;
+
+    public ReceivingThread(DatagramSocket serverSocket) {
+        this.serverSocket = serverSocket;
+    }
 
     @Override
     public void run() {
+        RDebug.print(DEBUG_LEVEL.DEBUG,
+            "Packet Receiver Thread ID: %d",
+            Thread.currentThread().getId()
+        );
+        byte[] receiveData = new byte[1024];
         while (true) {
             DatagramPacket receivePacket = new DatagramPacket(
                 receiveData, receiveData.length);
-            serverSocket.receive(receivePacket);
+            try {
+                serverSocket.receive(receivePacket);
+            } catch (IOException e) {
+                e.printStackTrace();
+                return;
+            }
             ByteBuffer packetId = ByteBuffer.wrap(
                 receivePacket.getData(), 0, 2);
             RDebug.print(DEBUG_LEVEL.DEBUG, 
                 "%d", packetId.getShort()
             );
-            currentPackets.add(new RDNSPacket(receivePacket));
+            DNSResolver.currentPackets.add(new RDNSPacket(receivePacket));
         }
     }
     
