@@ -88,8 +88,9 @@ class ReceivingThread implements Runnable {
             try {
                 serverSocket.receive(receivePacket);
             } catch (IOException e) {
-                e.printStackTrace();
-                return;
+                RDebug.print(DEBUG_LEVEL.DEBUG, 
+                    "%s", e.getMessage());
+                continue;
             }
             ByteBuffer packetId = ByteBuffer.wrap(
                 receivePacket.getData(), 0, 2);

@@ -11,6 +11,8 @@ import project.util.RDebug;
 import project.util.RQFlag;
 import project.util.RDebug.DEBUG_LEVEL;
 import project.util.RDNS;
+import project.util.RDNSRecord;
+import project.util.RDNSResponse;
 
 public class DNSClient {
     public static void main(String[] args) throws Exception
@@ -203,87 +205,64 @@ public class DNSClient {
             );
         }
 
-        // Question Record Name
-        Integer responseOffset = 12;
-        ByteArrayOutputStream questionLabelOutput = new ByteArrayOutputStream();
-        while (true) {
-            Integer labelLength = Byte.toUnsignedInt(receivePacketBytes[responseOffset++]);
-            if (labelLength == 0) break;
-            for (int j = 0; j < labelLength; j++) {
-                questionLabelOutput.write(receivePacketBytes[responseOffset++]);
-            }
-            if (Byte.toUnsignedInt(receivePacketBytes[responseOffset]) != 0) {
-                questionLabelOutput.write('.');
-            }
+        RDNSResponse resp = RDNSResponse.parse(receivePacket);
+
+        System.out.printf("~~~ QUESTION RECORDS ~~~\n");
+        for (int i = 0; i < resp.getQuestionRecords().size(); i++) {
+            RDNSRecord record = resp.getQuestionRecords().get(i);
+            System.out.printf("%28s %6s %6d\n",
+                record.getName(), 
+                RDNS.typeIndexToType(record.getType()), 
+                record.getRecordClass()
+            );
         }
 
-        RDebug.print(DEBUG_LEVEL.DEBUG, 
-            "QLO: %s\nQLO (b): %s", 
-            questionLabelOutput.toString(), 
-            RDNS.byteToBinary(questionLabelOutput.toByteArray())
-        );
+        RDebug.print(DEBUG_LEVEL.DEBUG, "%s", resp.getAnswerRecords());
 
-        // Question TYPE and CLASS
-        responseOffset += 4;
-
-        for (int i = 0; i < responseTotalRecords; i++) {
-            // Resource Record Name
-            LabelRtn labelRtn = RDNS.readLabel(receivePacketBytes, responseOffset);
-            responseOffset = labelRtn.getOffset();
-            String fullLabel = labelRtn.getLabelString();
-
-            RDebug.print(DEBUG_LEVEL.DEBUG, 
-                "RLO: %s (%d)", 
-                fullLabel, responseTotalRecords
-            );
-
-            // Response TYPE
-            Short responseType  = RDNS.responseToShort(receivePacketBytes, responseOffset);
-            responseOffset += 2;
-
-            // Response CLASS
-            Short responseClass = RDNS.responseToShort(receivePacketBytes, responseOffset);
-            responseOffset += 2;
-
-            // Response TTL
-            Long responseTTL    = RDNS.responseToUnsignedInt(receivePacketBytes, responseOffset);
-            responseOffset += 4;
-
-            // Response RDLength
-            Short responseRDLen = RDNS.responseToShort(receivePacketBytes, responseOffset);
-            responseOffset += 2;
-
-            RDebug.print(DEBUG_LEVEL.DEBUG, 
-                "Resp: %d %d %d %d",
-                responseType,
-                responseClass,
-                responseTTL,
-                responseRDLen
-            );
-
-            // Response RData
-            byte[] responseRDataBytes = new byte[responseRDLen];
-            System.arraycopy(
-                receivePacketBytes, responseOffset, 
-                responseRDataBytes, 0, 
-                responseRDLen
-            );
-
-            String responseRData = new String();
-            if (RDNS.typeIndexToType(responseType) != "NS") {
-                responseRData = RDNS.bytesToIP(responseRDataBytes);
-            } else {
-                LabelRtn lRtn = RDNS.readLabel(receivePacketBytes, responseOffset);
-                responseRData = new String(lRtn.getLabelString());
-            }
-            responseOffset += responseRDLen;
+        System.out.printf("~~~ ANSWER RECORDS ~~~\n");
+        for (int i = 0; i < resp.getAnswerRecords().size(); i++) {
+            RDNSRecord record = resp.getAnswerRecords().get(i);
             System.out.printf("%28s %6s %6d %8d %10d %28s\n",
-                fullLabel, 
-                RDNS.typeIndexToType(responseType), 
-                responseClass,
-                responseTTL,
-                responseRDLen,
-                responseRData
+                record.getName(), 
+                RDNS.typeIndexToType(record.getType()), 
+                record.getRecordClass(),
+                record.getTtl(),
+                record.getrDLength(),
+                record.getrData()
+            );
+        }
+
+        System.out.printf("~~~ AUTHORITY RECORDS ~~~\n");
+        for (int i = 0; i < resp.getAuthorityRecords().size(); i++) {
+            RDNSRecord record = resp.getAuthorityRecords().get(i);
+            System.out.printf("%28s %6s %6d %8d %10d %28s\n",
+                record.getName(), 
+                RDNS.typeIndexToType(record.getType()), 
+                record.getRecordClass(),
+                record.getTtl(),
+                record.getrDLength(),
+                new String(RDNS.readLabel(
+                    receivePacketBytes, 
+                    record.getOriginalOffset() + record.getNameTrueLength() + 10
+                ).getLabelString())
+            );
+        }
+
+        System.out.printf("~~~ ADDITIONAL RECORDS ~~~\n");
+        for (int i = 0; i < resp.getAdditionalRecords().size(); i++) {
+            RDNSRecord record = resp.getAdditionalRecords().get(i);
+            String recordType = RDNS.typeIndexToType(record.getType());
+            String rdataoutput = new String();
+            if (recordType == "A") {
+                rdataoutput = RDNS.bytesToIP(record.getrData());
+            } else rdataoutput = record.getrData().toString();
+            System.out.printf("%28s %6s %6d %8d %10d %28s\n",
+                record.getName(), 
+                recordType, 
+                record.getRecordClass(),
+                record.getTtl(),
+                record.getrDLength(),
+                rdataoutput
             );
         }
     }

@@ -102,6 +102,7 @@ public class RDNS {
             // Check if Sequence of Labels ending with Pointer
             // Otherwise, continue
             if (Byte.toUnsignedInt(bytes[currentOffset]) == 0) {
+                currentOffset++;
                 break;
             } else if (isLabelPtrByte(bytes[currentOffset])) {
                 labelString += '.';
