@@ -11,6 +11,7 @@ public class RDNSResponse {
     private byte[] data;
     private Short identifier;
     private DatagramPacket packet;
+    
     private int questionCount;
     private int answerCount;
     private int authorityCount;
@@ -125,8 +126,6 @@ public class RDNSResponse {
     private static RDNSRecord recordParse(
         RDNSResponse resp, boolean questionRecord, int offset
     ) {
-        RDebug.print(DEBUG_LEVEL.DEBUG, "!!! %d", offset);
-
         int currentOffset = offset;
         
         // Resource Record Name
@@ -134,19 +133,13 @@ public class RDNSResponse {
         currentOffset = labelRtn.getOffset();
         String fullLabel = labelRtn.getLabelString();
 
-        RDebug.print(DEBUG_LEVEL.DEBUG, "!2! %d", currentOffset);
-
-
         // Response TYPE
         Short responseType  = RDNS.responseToShort(resp.data, currentOffset);
         currentOffset += 2;
 
         // Response CLASS
         Short responseClass = RDNS.responseToShort(resp.data, currentOffset);
-        currentOffset += 2;
-
-        RDebug.print(DEBUG_LEVEL.DEBUG, "!3! %d", currentOffset);
-        
+        currentOffset += 2;        
 
         Long responseTTL;
         Short responseRDLen;

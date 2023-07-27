@@ -255,6 +255,8 @@ public class DNSClient {
             String rdataoutput = new String();
             if (recordType == "A") {
                 rdataoutput = RDNS.bytesToIP(record.getrData());
+            } else if (recordType == "AAAA") {
+                rdataoutput = RDNS.bytesToIPv6(record.getrData());
             } else rdataoutput = record.getrData().toString();
             System.out.printf("%28s %6s %6d %8d %10d %28s\n",
                 record.getName(), 

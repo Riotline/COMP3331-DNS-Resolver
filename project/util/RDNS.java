@@ -53,6 +53,21 @@ public class RDNS {
         return (bytes[0] & 0xff) + "." + (bytes[1] & 0xff) + "." + (bytes[2] & 0xff) + "." + (bytes[3] & 0xff);
     }
 
+    // Bytes to an string IPv6 representation
+    public static String bytesToIPv6(byte[] bytes) {
+        return (
+            String.format("%02X%02X:%02X%02X:%02X%02X:%02X%02X",
+                bytes[0], bytes[1],  bytes[2], bytes[3],
+                bytes[4], bytes[5], bytes[6], bytes[7]
+            ) + ":" +
+            String.format("%02X%02X:%02X%02X:%02X%02X:%02X%02X",
+                bytes[8], bytes[9],  bytes[10], bytes[11],
+                bytes[12], bytes[13], bytes[14], bytes[15]
+            )
+        )
+        .replaceAll(":0{1,4}", ":");
+    }
+
     public static String typeIndexToType(int typeIndex) {
         switch (typeIndex) {
             case 1: return "A";

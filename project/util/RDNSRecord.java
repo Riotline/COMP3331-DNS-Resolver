@@ -33,6 +33,26 @@ public class RDNSRecord {
         this.nameTrueLength = nameTrueLength;
     }
 
+    public RDNSRecord(
+        String name, 
+        int nameTrueLength,
+        Short type, 
+        Short recordClass,
+        int length
+    ) {
+        new RDNSRecord(
+            name, 
+            nameTrueLength, 
+            type, 
+            recordClass, 
+            -1L, 
+            (short) -1, 
+            (byte []) null, 
+            length, 
+            -1
+        );
+    }
+
     public String getName() {
         return name;
     }

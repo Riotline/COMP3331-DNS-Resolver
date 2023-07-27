@@ -6,7 +6,9 @@ import java.util.*;
 import java.nio.ByteBuffer;
 import java.nio.file.*;
 import project.util.RDebug;
+import project.util.RDNS;
 import project.util.RDNSPacket;
+import project.util.RDNSQuery;
 import project.util.RDebug.DEBUG_LEVEL;
 
 public class DNSResolver {
@@ -97,7 +99,30 @@ class ReceivingThread implements Runnable {
             RDebug.print(DEBUG_LEVEL.DEBUG, 
                 "%d", packetId.getShort()
             );
-            DNSResolver.currentPackets.add(new RDNSPacket(receivePacket));
+
+            if (!RDNS.isBit(receivePacket.getData()[2], 7)) {
+                RDNSQuery query = RDNSQuery.parse(receivePacket);
+                if (!DNSQuery.queries
+                            .stream()
+                            .map((RDNSQuery q) -> {
+                                return q.getIdentifier();})
+                            .anyMatch((byte[] q) -> {
+                                return Arrays.equals(q, query.getIdentifier());
+                })) {
+                    DNSQuery.queries.add(query);
+                    DNSQuery resolverQuery = new DNSQuery(serverSocket, query);
+                    Thread threadQuery = new Thread(resolverQuery);
+                    threadQuery.setDaemon(true);
+                    threadQuery.start();
+                }
+                RDebug.print(DEBUG_LEVEL.DEBUG,
+                    "%s", DNSQuery.queries
+                );
+            }
+
+            RDebug.print(DEBUG_LEVEL.DEBUG,
+                "TC: %s", Thread.activeCount()
+            );
         }
     }
     
