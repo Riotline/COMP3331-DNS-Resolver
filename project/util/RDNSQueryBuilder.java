@@ -75,29 +75,35 @@ public class RDNSQueryBuilder {
         
         ByteArrayOutputStream queryQuestions = new ByteArrayOutputStream();
 
-        for (int i = 0; i < questionCount; i++) {
-            // Question Count
-            System.arraycopy(
-                (short) questionCount, 0, 
-                queryHeader, 5, 
-                2
-            );
+        // Question Count
+        ByteBuffer buffer = ByteBuffer.allocate(2);
+        buffer.putShort((short) questionCount);
+        System.arraycopy(
+            buffer.array(), 0, 
+            queryHeader, 4, 
+            2
+        );
 
+        for (int i = 0; i < questionCount; i++) {
             // Query question name
+            RDebug.print(DEBUG_LEVEL.DEBUG, 
+                "%s", 
+                questionRecords.get(i).getName()
+            );
             String[] arrRecordName = questionRecords.get(i).getName().split("\\.");
             Integer questionLength = 1 + arrRecordName.length;
-            for (int j = 0; i < arrRecordName.length; i++) {
-                questionLength += arrRecordName[i].length();
+            for (int j = 0; j < arrRecordName.length; j++) {
+                questionLength += arrRecordName[j].length();
             }
 
             byte[] queryQuestionName = new byte[questionLength];
             Integer byteIndex = 0;
-            for (int j = 0; i < arrRecordName.length; i++) {
-                Integer labelLength = arrRecordName[i].length();
+            for (int j = 0; j < arrRecordName.length; j++) {
+                Integer labelLength = arrRecordName[j].length();
                 queryQuestionName[byteIndex++] = labelLength.byteValue(); 
                 
                 for (int k = 0; k < labelLength; k++) {
-                    queryQuestionName[byteIndex++] = (byte) arrRecordName[i].charAt(j);
+                    queryQuestionName[byteIndex++] = (byte) arrRecordName[j].charAt(k);
                 }
             }
             queryQuestionName[byteIndex] = (byte) '\0';

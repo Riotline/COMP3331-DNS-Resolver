@@ -3,17 +3,26 @@ package project.dnsResolver;
 import java.io.*;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.nio.ByteBuffer;
 import java.nio.file.*;
 import project.util.RDebug;
 import project.util.RDNS;
 import project.util.RDNSPacket;
 import project.util.RDNSQuery;
+import project.util.RDNSResponse;
 import project.util.RDebug.DEBUG_LEVEL;
 
 public class DNSResolver {
     private static ArrayList<InetAddress> rootServers = new ArrayList<InetAddress>();
     protected static ArrayList<RDNSPacket> currentPackets = new ArrayList<RDNSPacket>();
+    
+    private static int port;
+
+    public static int getPort() {
+        return port;
+    }
+
     public static void main(String[] args) throws Exception
     {
         // Get command line argument.
@@ -21,7 +30,7 @@ public class DNSResolver {
             System.out.println("Required arguments: port");
             return;
         }
-        int port = Integer.parseInt(args[0]);
+        port = Integer.parseInt(args[0]);
 
         // Debugging Initialisation
         RDebug.setDebugLevel(
@@ -51,7 +60,7 @@ public class DNSResolver {
         }
 
         DatagramSocket serverSocket = new DatagramSocket(port);
-        RDebug.print(DEBUG_LEVEL.INFO, 
+        RDebug.print(DEBUG_LEVEL.NONE, 
             "Running on port %d", serverSocket.getLocalPort()
         );
 
@@ -59,7 +68,7 @@ public class DNSResolver {
         receivingDaemon.setDaemon(true);
         receivingDaemon.start();
         // Processing Loop
-        RDebug.print(DEBUG_LEVEL.DEBUG,
+        RDebug.print(DEBUG_LEVEL.INFO,
             "Main Thread ID: %d",
             Thread.currentThread().getId()
         );
@@ -67,6 +76,10 @@ public class DNSResolver {
             continue;
         }
 
+    }
+
+    public static ArrayList<InetAddress> getRootServers() {
+        return rootServers;
     }
 }
 
@@ -102,22 +115,38 @@ class ReceivingThread implements Runnable {
 
             if (!RDNS.isBit(receivePacket.getData()[2], 7)) {
                 RDNSQuery query = RDNSQuery.parse(receivePacket);
-                if (!DNSQuery.queries
+                if (!DNSQuery.activequeries
                             .stream()
                             .map((RDNSQuery q) -> {
                                 return q.getIdentifier();})
                             .anyMatch((byte[] q) -> {
                                 return Arrays.equals(q, query.getIdentifier());
                 })) {
-                    DNSQuery.queries.add(query);
+                    DNSQuery.activequeries.add(query);
                     DNSQuery resolverQuery = new DNSQuery(serverSocket, query);
                     Thread threadQuery = new Thread(resolverQuery);
                     threadQuery.setDaemon(true);
                     threadQuery.start();
                 }
                 RDebug.print(DEBUG_LEVEL.DEBUG,
-                    "%s", DNSQuery.queries
+                    "%s", DNSQuery.activequeries
                 );
+            } else {
+                RDNSResponse response = RDNSResponse.parse(receivePacket);
+                DNSQuery.resolvers.forEach((DNSQuery r) -> {
+                    if (Arrays.equals(
+                            r.getExpectedIdentifier(), 
+                            response.getIdentifier()
+                    )) {
+                        RDebug.print(DEBUG_LEVEL.DEBUG, ">>>>> SENDING PACKET TO RESOLVER");
+                        try {
+                            r.newPacket.offer(receivePacket, 1000L, TimeUnit.MILLISECONDS);
+                        } catch (InterruptedException e) {
+                            // TODO Auto-generated catch block
+                            e.printStackTrace();
+                        }
+                    }
+                });
             }
 
             RDebug.print(DEBUG_LEVEL.DEBUG,

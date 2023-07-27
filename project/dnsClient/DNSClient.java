@@ -11,6 +11,8 @@ import project.util.RDebug;
 import project.util.RQFlag;
 import project.util.RDebug.DEBUG_LEVEL;
 import project.util.RDNS;
+import project.util.RDNSQuery;
+import project.util.RDNSQueryBuilder;
 import project.util.RDNSRecord;
 import project.util.RDNSResponse;
 
@@ -48,93 +50,15 @@ public class DNSClient {
         // UDP Socket
         DatagramSocket clientSocket = new DatagramSocket();
 
-        byte[] queryId = new byte[2];
-        // Generation of Random Bytes via the java util Random
-        // Relevant method info used from tutorialspoint
-        Random random = new Random();
-        random.nextBytes(queryId);
-
-        // Query Flags startingf from 0 index
-        // QR (1), OPCode (4), AA (1), TC (1), RD (1), RA (1)
-        // ZERO (3), rCode (4)
-
-        // BitSet queryFlags = new BitSet(16);
-        // queryFlags.set(RQFlag.QR.getIndex(), false);
-
-        byte[] queryFlags = new byte[2];
-
-        // Query number of questions
-        BitSet queryQNo = new BitSet(16);
-        queryQNo.set(0, true);
-
-        // Query header construction
-        byte[] queryHeader = new byte[12];
-        System.arraycopy(
-            queryId, 0, 
-            queryHeader, 0, 
-            queryId.length
+        RDNSQueryBuilder newQuery = new RDNSQueryBuilder();
+        newQuery.addQuestion(recordName, 1, 1);
+        RDebug.print(DEBUG_LEVEL.DEBUG, 
+            "%s", 
+            newQuery.getQuestionRecords()
         );
-        System.arraycopy(
-            queryFlags, 0, 
-            queryHeader, queryId.length, 
-            queryFlags.length
-        );
-        queryHeader[5] = queryQNo.toByteArray()[0];
+        DatagramPacket sendPacket = newQuery.compose(resolverIP, resolverPort);
+        RDNSQuery query = RDNSQuery.parse(sendPacket);
 
-        // Query question name
-        String[] arrRecordName = recordName.split("\\.");
-        Integer questionLength = 1 + arrRecordName.length;
-        for (int i = 0; i < arrRecordName.length; i++) {
-            questionLength += arrRecordName[i].length();
-        }
-
-        byte[] queryQuestionName = new byte[questionLength];
-        Integer byteIndex = 0;
-        for (int i = 0; i < arrRecordName.length; i++) {
-            Integer labelLength = arrRecordName[i].length();
-            queryQuestionName[byteIndex++] = labelLength.byteValue(); 
-            
-            for (int j = 0; j < labelLength; j++) {
-                queryQuestionName[byteIndex++] = (byte) arrRecordName[i].charAt(j);
-            }
-        }
-        queryQuestionName[byteIndex] = (byte) '\0';
-
-        // Query Question Type and Class
-        byte queryQType = 1;
-        byte queryQClass = 1;
-
-        // Query Question Construction
-        byte[] queryQuestion = new byte[questionLength + 4];
-        System.arraycopy(
-            queryQuestionName, 0, 
-            queryQuestion, 0, 
-            queryQuestionName.length
-        );
-        
-        queryQuestion[queryQuestionName.length] = (byte) '\0';
-        queryQuestion[queryQuestionName.length + 1] = queryQType;
-        queryQuestion[queryQuestionName.length + 2] = (byte) '\0';
-        queryQuestion[queryQuestionName.length + 3] = queryQClass;
-
-        byte[] query = new byte[queryHeader.length + queryQuestion.length];
-        System.arraycopy(
-            queryHeader, 0, 
-            query, 0, 
-            queryHeader.length
-        );
-        System.arraycopy(
-            queryQuestion, 0, 
-            query, queryHeader.length, 
-            queryQuestion.length
-        );
-
-        RDebug.print(DEBUG_LEVEL.DEBUG, "Q: %s", new String(query));
-        RDebug.print(DEBUG_LEVEL.DEBUG, "Q (b): %s", RDNS.byteToBinary(query));
-
-        DatagramPacket sendPacket = new DatagramPacket(
-            query, query.length, resolverIP, resolverPort
-        );
         clientSocket.send(sendPacket);
 
         byte[] receiveData = new byte[1024];
@@ -161,10 +85,10 @@ public class DNSClient {
             2
         );
 
-        if (!(RDNS.byteToBinary(responseId).equals(RDNS.byteToBinary(queryId)))) {
+        if (!(RDNS.byteToBinary(responseId).equals(RDNS.byteToBinary(query.getIdentifier())))) {
             RDebug.print(DEBUG_LEVEL.WARNING, 
                 "Response ID (%s) mismatch to Query ID (%s)",
-                RDNS.byteToBinary(responseId), RDNS.byteToBinary(queryId)
+                RDNS.byteToBinary(responseId), RDNS.byteToBinary(query.getIdentifier())
             ); return;
         } else if (!RDNS.isBit(receivePacketBytes[2], 7)) {
             RDebug.print(DEBUG_LEVEL.WARNING, 
@@ -228,7 +152,7 @@ public class DNSClient {
                 record.getRecordClass(),
                 record.getTtl(),
                 record.getrDLength(),
-                record.getrData()
+                RDNS.bytesToIP(record.getrData())
             );
         }
 

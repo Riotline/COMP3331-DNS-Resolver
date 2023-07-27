@@ -40,7 +40,7 @@ public class RDNSRecord {
         Short recordClass,
         int length
     ) {
-        new RDNSRecord(
+        this(
             name, 
             nameTrueLength, 
             type, 

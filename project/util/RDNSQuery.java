@@ -32,6 +32,10 @@ public class RDNSQuery {
     private int questionCount;
     private ArrayList<RDNSRecord> questionRecords = new ArrayList<RDNSRecord>();
 
+    public ArrayList<RDNSRecord> getQuestions() {
+        return questionRecords;
+    }
+
     private RDNSQuery(DatagramPacket packet) {
         this.packet = packet;
     }

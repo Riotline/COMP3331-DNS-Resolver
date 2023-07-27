@@ -9,7 +9,7 @@ import project.util.RDebug.DEBUG_LEVEL;
 
 public class RDNSResponse {
     private byte[] data;
-    private Short identifier;
+    private byte[] identifier = new byte[2];
     private DatagramPacket packet;
     
     private int questionCount;
@@ -30,7 +30,7 @@ public class RDNSResponse {
         return data;
     }
 
-    public Short getIdentifier() {
+    public byte[] getIdentifier() {
         return identifier;
     }
 
@@ -69,9 +69,9 @@ public class RDNSResponse {
             dnsIdBytes, 0, 
             2
         );
-        resp.identifier = ByteBuffer.wrap(
+        ByteBuffer.wrap(
             resp.data, 0, 2
-        ).getShort();
+        ).get(resp.identifier);
 
         if (!RDNS.isBit(resp.data[2], 7)) {
             RDebug.print(DEBUG_LEVEL.WARNING, 
