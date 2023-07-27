@@ -23,6 +23,8 @@ public class DNSQuery implements Runnable {
     protected static ArrayList<RDNSQuery> activequeries = new ArrayList<RDNSQuery>();
     protected static ArrayList<DNSQuery> resolvers = new ArrayList<DNSQuery>();
 
+    private long startedTimestamp = System.currentTimeMillis();
+
     private RDNSQuery mainQuery;
     private byte[] expectedIdentifier;
     private DatagramSocket socket;
@@ -57,6 +59,11 @@ public class DNSQuery implements Runnable {
             );
         }
         while (true) {
+            if ((System.currentTimeMillis() - startedTimestamp) > 1500) {
+                sendServerError();
+                return;
+            }
+
             expectedIdentifier = currentQuery.getIdentifier();
             RDebug.print(DEBUG_LEVEL.INFO, "ATTEMPT TO: %s", nameServerToQuery);
             DatagramPacket packetToSend = currentQuery.compose(nameServerToQuery, 53);
@@ -68,7 +75,7 @@ public class DNSQuery implements Runnable {
             DatagramPacket receivedPacket = null;
                 
             try {
-                receivedPacket = newPacket.poll(1000L, TimeUnit.MILLISECONDS);
+                receivedPacket = newPacket.poll(400L, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e1) {
                 // TODO Auto-generated catch block
                 e1.printStackTrace();
@@ -99,6 +106,7 @@ public class DNSQuery implements Runnable {
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
+                    DNSQuery.resolvers.remove(this);
                     return;
                 } else if (resp.getAuthorityRecords().size() > 0) {
                     ArrayList<RDNSRecord> additionalRecords = resp.getAdditionalRecords();
@@ -122,7 +130,9 @@ public class DNSQuery implements Runnable {
                                 }).forEach((InetAddress iA) -> {
                                     addRecords.add(iA);
                                 });
-                            } else {
+                            } 
+                            /*
+                            else {
                                 RDNSQueryBuilder newQuery = new RDNSQueryBuilder();
                                 newQuery.addQuestion(new String(rec.getrData()), 1, 1);
                                 byte[] nsId = newQuery.getIdentifier();
@@ -162,7 +172,7 @@ public class DNSQuery implements Runnable {
                                         });
                                     }
                                 }
-                            }
+                            }*/
                         }
                     });
                     RDebug.print(DEBUG_LEVEL.INFO, 
@@ -171,7 +181,7 @@ public class DNSQuery implements Runnable {
                     );
                     if (addRecords.size() != 0) {
                         RDebug.print(DEBUG_LEVEL.INFO, "%d", addRecords.size());
-                        nameServers = new ArrayList<>(addRecords);
+                        nameServers.addAll(0, addRecords);
                         nameServerIndex = 0;
                     }
                     nameServerToQuery = nameServers.get(nameServerIndex++);
@@ -182,26 +192,31 @@ public class DNSQuery implements Runnable {
                 if (nameServerIndex + 1 < nameServers.size())
                     nameServerToQuery = nameServers.get(++nameServerIndex);
                 else {
-                    RDNSResponseBuilder newResponse = new RDNSResponseBuilder();
-                    newResponse.setIdentifier(mainQuery.getIdentifier());
-                    
-                    mainQuery.getQuestions().forEach(newResponse::addQuestion);
-                    // resp.getAdditionalRecords().forEach(newResponse::addAdditional);
-                    newResponse.enableError();
-                    DatagramPacket dP = newResponse.compose(
-                        mainQuery.getPacket().getAddress(), 
-                        mainQuery.getPacket().getPort()
-                    );
-
-                    try {
-                        socket.send(dP);
-                    } catch (IOException e) {
-                        e.printStackTrace();
-                    }
-                    return;
+                    sendServerError();
                 }
             }
         }
+    }
+
+    private void sendServerError() {
+        RDNSResponseBuilder newResponse = new RDNSResponseBuilder();
+        newResponse.setIdentifier(mainQuery.getIdentifier());
+        
+        mainQuery.getQuestions().forEach(newResponse::addQuestion);
+        // resp.getAdditionalRecords().forEach(newResponse::addAdditional);
+        newResponse.enableError();
+        DatagramPacket dP = newResponse.compose(
+            mainQuery.getPacket().getAddress(), 
+            mainQuery.getPacket().getPort()
+        );
+
+        try {
+            socket.send(dP);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        DNSQuery.resolvers.remove(this);
+        return;
     }
     
 }

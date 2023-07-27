@@ -96,6 +96,12 @@ public class DNSClient {
             ); return;
         }
 
+        if (RDNS.isBit(receivePacketBytes[3], 1)) {
+            RDebug.print(DEBUG_LEVEL.NONE, 
+                "%s [!] Server returned a server failure error [!]", RDebug.ANSI_RED
+            );
+        }
+
         // For getting count of answers for the use in looping
         Integer responseAnswerQty = RDNS.getQtyOfRecords(
             receivePacketBytes, 6
