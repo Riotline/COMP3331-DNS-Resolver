@@ -7,6 +7,7 @@ import java.util.concurrent.TimeUnit;
 import java.nio.ByteBuffer;
 import java.nio.file.*;
 import project.util.RDebug;
+import project.util.DNSQuery;
 import project.util.RDNS;
 import project.util.RDNSPacket;
 import project.util.RDNSQuery;

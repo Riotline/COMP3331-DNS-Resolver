@@ -1,4 +1,4 @@
-package project.dnsResolver;
+package project.util;
 
 import java.io.IOException;
 import java.net.*;
@@ -9,26 +9,19 @@ import java.util.List;
 import java.util.concurrent.SynchronousQueue;
 import java.util.concurrent.TimeUnit;
 
-import project.util.RDNS;
-import project.util.RDNSPacket;
-import project.util.RDNSQuery;
-import project.util.RDNSQueryBuilder;
-import project.util.RDNSRecord;
-import project.util.RDNSResponse;
-import project.util.RDNSResponseBuilder;
-import project.util.RDebug;
+import project.dnsResolver.DNSResolver;
 import project.util.RDebug.DEBUG_LEVEL;
 
 public class DNSQuery implements Runnable {
-    protected static ArrayList<RDNSQuery> activequeries = new ArrayList<RDNSQuery>();
-    protected static ArrayList<DNSQuery> resolvers = new ArrayList<DNSQuery>();
+    public static ArrayList<RDNSQuery> activequeries = new ArrayList<RDNSQuery>();
+    public static ArrayList<DNSQuery> resolvers = new ArrayList<DNSQuery>();
 
     private long startedTimestamp = System.currentTimeMillis();
 
     private RDNSQuery mainQuery;
     private byte[] expectedIdentifier;
     private DatagramSocket socket;
-    protected SynchronousQueue<DatagramPacket> newPacket = new SynchronousQueue<>();
+    public SynchronousQueue<DatagramPacket> newPacket = new SynchronousQueue<>();
     private ArrayList<InetAddress> nameServers = DNSResolver.getRootServers();
 
     public DNSQuery(DatagramSocket socket, RDNSQuery packet) {
@@ -75,7 +68,7 @@ public class DNSQuery implements Runnable {
             DatagramPacket receivedPacket = null;
                 
             try {
-                receivedPacket = newPacket.poll(400L, TimeUnit.MILLISECONDS);
+                receivedPacket = newPacket.poll(500L, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e1) {
                 // TODO Auto-generated catch block
                 e1.printStackTrace();
@@ -181,7 +174,8 @@ public class DNSQuery implements Runnable {
                     );
                     if (addRecords.size() != 0) {
                         RDebug.print(DEBUG_LEVEL.INFO, "%d", addRecords.size());
-                        nameServers.addAll(0, addRecords);
+                        //nameServers.addAll(0, addRecords);
+                        nameServers = addRecords;
                         nameServerIndex = 0;
                     }
                     nameServerToQuery = nameServers.get(nameServerIndex++);
